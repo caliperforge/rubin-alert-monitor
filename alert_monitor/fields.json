@@ -1,0 +1,22 @@
+{
+  "radius": 3600,
+  "n": 100,
+  "columns": [
+    "r:diaObjectId",
+    "r:nDiaSources",
+    "r:midpointMjdTai",
+    "f:firstDiaSourceMjdTaiFink",
+    "f:clf_cats_class",
+    "f:clf_cats_score",
+    "f:main_label_classifier",
+    "f:main_label_crossmatch",
+    "f:xm_tns_type",
+    "f:is_sso"
+  ],
+  "fields": [
+    {"ra": 150.66, "dec": 0.85},
+    {"ra": 61.96, "dec": -48.71},
+    {"ra": 9.45, "dec": -44.0},
+    {"ra": 53.1, "dec": -28.1}
+  ]
+}
