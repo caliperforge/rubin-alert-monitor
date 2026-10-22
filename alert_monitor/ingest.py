@@ -61,6 +61,9 @@ def snapshot(day: date, config: dict, fetch=fetch_field) -> dict:
 
 
 def write_snapshot(snap: dict, out_dir: Path = Path("data/snapshots")) -> Path:
+    fields = snap["header"]["fields"]
+    if not any("rows" in e for e in fields):
+        raise RuntimeError(f"no field returned rows: {[e['error'] for e in fields]}")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{snap['header']['date']}.json"
     path.write_text(json.dumps(snap, indent=2))

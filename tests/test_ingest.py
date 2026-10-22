@@ -121,7 +121,29 @@ def test_write_snapshot(tmp_path):
     path = ingest.write_snapshot(snap, tmp_path / "snapshots")
     assert path == tmp_path / "snapshots" / "2026-10-18.json"
     assert json.loads(path.read_text()) == snap
-    assert "data/snapshots/" in (ROOT / ".gitignore").read_text().split()
+    assert "data/snapshots/" not in (ROOT / ".gitignore").read_text().split()
+
+
+def test_write_snapshot_refuses_all_errors(tmp_path):
+    def fetch(field, config):
+        raise TimeoutError("timed out")
+
+    snap = ingest.snapshot(DAY, CONFIG, fetch=fetch)
+    with pytest.raises(RuntimeError, match="TimeoutError: timed out"):
+        ingest.write_snapshot(snap, tmp_path / "snapshots")
+    assert not (tmp_path / "snapshots").exists()
+
+
+def test_write_snapshot_one_field_rows(tmp_path):
+    def fetch(field, config):
+        if field is not FIELDS[0]:
+            raise TimeoutError("timed out")
+        return replay(field, config)
+
+    snap = ingest.snapshot(DAY, CONFIG, fetch=fetch)
+    path = ingest.write_snapshot(snap, tmp_path / "snapshots")
+    assert json.loads(path.read_text()) == snap
+    assert [e.get("error") for e in snap["header"]["fields"]] == [None] + ["TimeoutError: timed out"] * (len(FIELDS) - 1)
 
 
 @pytest.mark.live

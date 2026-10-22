@@ -1,4 +1,3 @@
-data/snapshots/
 .venv/
 __pycache__/
 .pytest_cache/
