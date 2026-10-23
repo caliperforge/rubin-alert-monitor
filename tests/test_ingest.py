@@ -1,3 +1,4 @@
+import gzip
 import io
 import json
 from collections import Counter
@@ -119,9 +120,17 @@ def test_fetch_body_and_timeout(monkeypatch):
 def test_write_snapshot(tmp_path):
     snap = ingest.snapshot(DAY, CONFIG, fetch=replay)
     path = ingest.write_snapshot(snap, tmp_path / "snapshots")
-    assert path == tmp_path / "snapshots" / "2026-10-18.json"
-    assert json.loads(path.read_text()) == snap
+    assert path == tmp_path / "snapshots" / "2026-10-18.json.gz"
+    assert gzip.decompress(path.read_bytes()).decode() == json.dumps(snap, separators=(",", ":"))
     assert "data/snapshots/" not in (ROOT / ".gitignore").read_text().split()
+
+
+def test_write_snapshot_refuses_over_limit(tmp_path, monkeypatch):
+    monkeypatch.setattr(ingest, "MAX_BYTES", 10)
+    snap = ingest.snapshot(DAY, CONFIG, fetch=replay)
+    with pytest.raises(RuntimeError, match=r"over the .+ MB limit"):
+        ingest.write_snapshot(snap, tmp_path / "snapshots")
+    assert not (tmp_path / "snapshots").exists()
 
 
 def test_write_snapshot_refuses_all_errors(tmp_path):
@@ -142,7 +151,8 @@ def test_write_snapshot_one_field_rows(tmp_path):
 
     snap = ingest.snapshot(DAY, CONFIG, fetch=fetch)
     path = ingest.write_snapshot(snap, tmp_path / "snapshots")
-    assert json.loads(path.read_text()) == snap
+    assert path == tmp_path / "snapshots" / "2026-10-18.json.gz"
+    assert gzip.decompress(path.read_bytes()).decode() == json.dumps(snap, separators=(",", ":"))
     assert [e.get("error") for e in snap["header"]["fields"]] == [None] + ["TimeoutError: timed out"] * (len(FIELDS) - 1)
 
 
@@ -150,7 +160,7 @@ def test_write_snapshot_one_field_rows(tmp_path):
 def test_live_snapshot():
     today = date.today()
     path = ingest.write_snapshot(ingest.snapshot(today, CONFIG))
-    assert path == Path("data/snapshots") / f"{today.isoformat()}.json"
-    header = json.loads(path.read_text())["header"]
+    assert path == Path("data/snapshots") / f"{today.isoformat()}.json.gz"
+    header = json.loads(gzip.decompress(path.read_bytes()))["header"]
     assert header["date"] == today.isoformat()
     assert any("rows" in e for e in header["fields"])

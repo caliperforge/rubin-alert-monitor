@@ -1,3 +1,4 @@
+import gzip
 import json
 import os
 import statistics
@@ -202,5 +203,10 @@ def write(rows: list[dict], out_dir: Path = Path("results")) -> None:
     (out_dir / "label_sanity.md").write_text(summary(rows))
 
 
+def load(day: str, snapshots: Path = SNAPSHOTS) -> dict:
+    with gzip.open(snapshots / f"{day}.json.gz") as f:
+        return json.load(f)
+
+
 if __name__ == "__main__":
-    write(run(json.loads((SNAPSHOTS / f"{date.today().isoformat()}.json").read_text())))
+    write(run(load(date.today().isoformat())))

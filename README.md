@@ -27,7 +27,7 @@ Columns starting `r:` come from Rubin's alert. Columns starting `f:` are added b
 
 ## Snapshot
 
-Written to `data/snapshots/<YYYY-MM-DD>.json` and committed:
+Written as compact gzipped JSON to `data/snapshots/<YYYY-MM-DD>.json.gz` and committed, and refused when over 50 MB gzipped:
 
 ```
 {"header": {"date": "<YYYY-MM-DD>", "fields": [{"ra", "dec", "rows" | "error"}]}, "rows": [...]}
@@ -52,7 +52,7 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 
 ## Daily run
 
-`.github/workflows/daily.yml` runs the snapshot and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json`, `results/label_sanity.jsonl` and `results/label_sanity.md` to main. When no field returns rows, the job fails and commits nothing.
+`.github/workflows/daily.yml` runs the snapshot and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json.gz`, `results/label_sanity.jsonl` and `results/label_sanity.md` to main. When no field returns rows, or the gzipped snapshot is over 50 MB, the job fails and commits nothing.
 
 ## Running
 

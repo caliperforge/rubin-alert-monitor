@@ -1,3 +1,4 @@
+import gzip
 import json
 from datetime import date
 from pathlib import Path
@@ -6,6 +7,7 @@ from urllib.request import Request, urlopen
 URL = "https://api.lsst.fink-portal.org/api/v1/conesearch"
 TIMEOUT = 90
 FIELDS_PATH = Path(__file__).with_name("fields.json")
+MAX_BYTES = 50_000_000
 
 
 def load_config(path: Path = FIELDS_PATH) -> dict:
@@ -64,9 +66,12 @@ def write_snapshot(snap: dict, out_dir: Path = Path("data/snapshots")) -> Path:
     fields = snap["header"]["fields"]
     if not any("rows" in e for e in fields):
         raise RuntimeError(f"no field returned rows: {[e['error'] for e in fields]}")
+    data = gzip.compress(json.dumps(snap, separators=(",", ":")).encode(), mtime=0)
+    if len(data) > MAX_BYTES:
+        raise RuntimeError(f"gzipped snapshot is {len(data) / 1e6:.2f} MB, over the {MAX_BYTES / 1e6:g} MB limit")
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{snap['header']['date']}.json"
-    path.write_text(json.dumps(snap, indent=2))
+    path = out_dir / f"{snap['header']['date']}.json.gz"
+    path.write_bytes(data)
     return path
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from alert_monitor import ingest
 from alert_monitor.checks import labels
 
 ROOT = Path(__file__).parents[1]
@@ -24,6 +25,10 @@ def many(k):
 def summary(snap, tmp_path):
     labels.write(labels.run(snap, env={}), tmp_path)
     return (tmp_path / "label_sanity.md").read_text()
+
+
+def test_load_reads_written_snapshot(tmp_path):
+    assert labels.load(DAY, ingest.write_snapshot(SNAP, tmp_path).parent) == SNAP
 
 
 def test_checks_in_order_with_known_values():
@@ -120,6 +125,6 @@ def test_small_fixture_verdicts(tmp_path):
 @pytest.mark.live
 def test_live_label_rows():
     today = date.today().isoformat()
-    labels.write(labels.run(json.loads((Path("data/snapshots") / f"{today}.json").read_text())))
+    labels.write(labels.run(labels.load(today)))
     rows = [json.loads(x) for x in Path("results/label_sanity.jsonl").read_text().splitlines()]
     assert [r["check"] for r in rows if r["date"] == today and r["check"] != "tns_direct"] == CHECKS
