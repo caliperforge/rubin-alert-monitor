@@ -1,3 +1,6 @@
+import pytest
+from jsonschema import ValidationError
+
 from alert_monitor import record
 from alert_monitor.merge import merge
 
@@ -50,3 +53,11 @@ def test_days_watched_spans_both_records():
     (one,) = merge([record.from_fink(FINK, AT), alerce("SNIa", first=61310.0, last=61325.0, ndet=9)])
     assert (one["t_first"], one["t_last"]) == ("2026-09-26T23:59:23.000Z", "2026-10-16T23:59:23.000Z")
     assert (one["n_obs"], one["days_watched"]) == (9, 20.0)
+
+
+def test_merged_records_validate_and_aliases_do_not(valid):
+    merged = merge([record.from_fink(FINK, AT), alerce("AGN"), lasair(5.0)])
+    for r in merged:
+        valid(r)
+    with pytest.raises(ValidationError):
+        valid({**merged[0], "aliases": [{"broker": "alerce", "id": "ZTF26abcdxyz"}]})
