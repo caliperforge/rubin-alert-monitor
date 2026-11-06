@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caliperforge.github.io/sky-schema/schema/object.json",
+  "title": "Sky object record, v0",
+  "description": "One record per object, written by the Python jobs and read by the pages. Near objects (asteroid candidates) and far objects (transients) share this shape; lane-specific fields are optional and the lane says which apply.",
+  "type": "object",
+  "required": ["schema_version", "id", "lane", "source", "ra", "dec", "t_first", "t_last", "n_obs"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 0 },
+    "id": { "type": "string", "minLength": 1, "description": "Source's identifier: MPC temporary designation, or the broker's object id." },
+    "lane": { "enum": ["near", "far"] },
+    "source": { "enum": ["mpc-neocp", "alerce", "fink", "lasair"] },
+    "ra": { "type": "number", "minimum": 0, "exclusiveMaximum": 360, "description": "Degrees, ICRS." },
+    "dec": { "type": "number", "minimum": -90, "maximum": 90, "description": "Degrees, ICRS." },
+    "t_first": { "type": "string", "format": "date-time", "description": "First observation, UTC." },
+    "t_last": { "type": "string", "format": "date-time", "description": "Last observation, UTC." },
+    "n_obs": { "type": "integer", "minimum": 0 },
+    "mag": { "type": ["number", "null"], "description": "Latest brightness. V for near, the alert band's magnitude for far." },
+
+    "score": { "type": "integer", "minimum": 0, "maximum": 100, "description": "near: MPC NEO score." },
+    "arc_days": { "type": "number", "minimum": 0, "description": "near: span of the observations." },
+    "h": { "type": ["number", "null"], "description": "near: absolute magnitude, a size proxy." },
+    "not_seen_days": { "type": "number", "minimum": 0, "description": "near: days since the last observation at snapshot time." },
+    "urgency": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "near: 1 means about to be lost. Null until the nightly job computes it." },
+    "motion": {
+      "type": ["object", "null"],
+      "required": ["ra_rate", "dec_rate"],
+      "additionalProperties": false,
+      "properties": {
+        "ra_rate": { "type": "number", "description": "arcsec per hour, fitted from the public observation list." },
+        "dec_rate": { "type": "number", "description": "arcsec per hour." }
+      }
+    },
+    "outcome": { "enum": ["pending", "confirmed_neo", "not_neo", "lost", null], "description": "near: resolved by the nightly job once the object leaves the confirmation page." },
+    "stations": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z0-9][0-9][0-9]$" }, "description": "near: MPC observatory codes that reported it." },
+
+    "labels": {
+      "type": "array",
+      "description": "far: one entry per broker label seen, newest last.",
+      "items": {
+        "type": "object",
+        "required": ["broker", "label", "raw", "at"],
+        "additionalProperties": false,
+        "properties": {
+          "broker": { "enum": ["alerce", "fink", "lasair"] },
+          "label": { "enum": ["sn", "agn", "variable", "nuclear", "moving", "unknown"], "description": "Normalised class." },
+          "raw": { "type": "string", "description": "The broker's own label, untouched." },
+          "score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "days_watched": { "type": "number", "minimum": 0, "description": "far: t_last minus t_first in days." },
+    "truth": {
+      "type": ["object", "null"],
+      "description": "far: the Transient Name Server classification, when one exists.",
+      "required": ["name", "type", "classified_at"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "description": "TNS type string, e.g. 'SN Ia'." },
+        "classified_at": { "type": "string", "format": "date-time" },
+        "spectrum_url": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
+    "contested": { "type": "boolean", "description": "far: brokers disagree, or the second opinion abstained." },
+    "verdict": {
+      "type": ["object", "null"],
+      "description": "far: the machine reviewer's call on a contested object.",
+      "required": ["label", "confidence", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "enum": ["sn", "agn", "variable", "nuclear", "moving", "unknown", "refused"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reason": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "visibility": {
+      "type": "object",
+      "description": "Per site id (from sky-core's site list): tonight's observability.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["alt_max_deg", "hours_up", "moon_sep_deg"],
+        "additionalProperties": false,
+        "properties": {
+          "alt_max_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+          "hours_up": { "type": "number", "minimum": 0, "maximum": 24, "description": "Hours above 30 degrees in the coming night." },
+          "moon_sep_deg": { "type": "number", "minimum": 0, "maximum": 180 }
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "lane": { "const": "near" } } }, "then": { "required": ["score", "arc_days", "not_seen_days"], "not": { "anyOf": [ { "required": ["labels"] }, { "required": ["truth"] }, { "required": ["verdict"] } ] } } },
+    { "if": { "properties": { "lane": { "const": "far" } } }, "then": { "required": ["labels", "days_watched"], "not": { "anyOf": [ { "required": ["score"] }, { "required": ["arc_days"] }, { "required": ["outcome"] }, { "required": ["stations"] } ] } } }
+  ]
+}

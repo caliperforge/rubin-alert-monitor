@@ -1,0 +1,21 @@
+{
+  "schema_version": 0,
+  "id": "ZTF26abcdxyz",
+  "lane": "far",
+  "source": "alerce",
+  "ra": 150.6612,
+  "dec": 0.8503,
+  "t_first": "2026-10-31T03:12:00Z",
+  "t_last": "2026-11-05T04:40:00Z",
+  "n_obs": 9,
+  "mag": 19.4,
+  "labels": [
+    { "broker": "alerce", "label": "sn", "raw": "SNIa", "score": 0.81, "at": "2026-11-05T09:00:00Z" },
+    { "broker": "fink", "label": "sn", "raw": "SN candidate", "score": 0.94, "at": "2026-11-05T09:00:00Z" },
+    { "broker": "lasair", "label": "nuclear", "raw": "NT", "score": null, "at": "2026-11-05T09:00:00Z" }
+  ],
+  "days_watched": 5.06,
+  "truth": null,
+  "contested": true,
+  "verdict": null
+}
