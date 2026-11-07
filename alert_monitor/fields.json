@@ -3,6 +3,8 @@
   "n": 100,
   "columns": [
     "r:diaObjectId",
+    "r:ra",
+    "r:dec",
     "r:nDiaSources",
     "r:midpointMjdTai",
     "f:firstDiaSourceMjdTaiFink",

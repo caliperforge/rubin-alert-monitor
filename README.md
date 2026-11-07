@@ -25,7 +25,7 @@ A field is one patch of sky: a centre given as right ascension (`ra`) and declin
 
 ## Columns
 
-Columns starting `r:` come from Rubin's alert. Columns starting `f:` are added by Fink. The columns are set in `alert_monitor/fields.json`: `r:diaObjectId`, `r:nDiaSources`, `r:midpointMjdTai`, `f:firstDiaSourceMjdTaiFink`, `f:clf_cats_class`, `f:clf_cats_score`, `f:main_label_classifier`, `f:main_label_crossmatch`, `f:xm_tns_type`, `f:is_sso`. Times are given as MJD (Modified Julian Date, a running count of days used in astronomy) on the TAI clock (International Atomic Time): `r:midpointMjdTai` is when Rubin last detected the object, and `f:firstDiaSourceMjdTaiFink` is when Fink first saw it detected. `f:main_label_classifier` is Fink's summary label for the object, and `f:is_sso` says whether it is a known Solar System object, such as an asteroid. The checks do not use these two.
+Columns starting `r:` come from Rubin's alert. Columns starting `f:` are added by Fink. The columns are set in `alert_monitor/fields.json`: `r:diaObjectId`, `r:ra`, `r:dec`, `r:nDiaSources`, `r:midpointMjdTai`, `f:firstDiaSourceMjdTaiFink`, `f:clf_cats_class`, `f:clf_cats_score`, `f:main_label_classifier`, `f:main_label_crossmatch`, `f:xm_tns_type`, `f:is_sso`. Times are given as MJD (Modified Julian Date, a running count of days used in astronomy) on the TAI clock (International Atomic Time): `r:midpointMjdTai` is when Rubin last detected the object, and `f:firstDiaSourceMjdTaiFink` is when Fink first saw it detected. `f:main_label_classifier` is Fink's summary label for the object, and `f:is_sso` says whether it is a known Solar System object, such as an asteroid. The checks do not use these two.
 
 `r:diaObjectId` is Rubin's ID for an object, and `r:nDiaSources` is how many times Rubin has detected it. `f:clf_cats_class` is the label from Fink's classifier, and `f:clf_cats_score` is the classifier's confidence in that label. `f:main_label_crossmatch` is the object's type in SIMBAD, a catalogue of known astronomical objects. `f:xm_tns_type` is the object's type in TNS, the Transient Name Server. TNS is the official register of reported transients, which are objects that appear or change for a short time, such as supernovae.
 
@@ -58,10 +58,21 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 
 `.github/workflows/daily.yml` runs the snapshot and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json.gz`, `results/label_sanity.jsonl` and `results/label_sanity.md` to main. When no field returns rows, or the gzipped snapshot is over 50 MB, the job fails and commits nothing.
 
+## Combined run
+
+`uv run python -m alert_monitor.ingest_all` fetches Fink and ALeRCE, merges their records, validates each against the sky-schema object schema, and writes `data/objects/<YYYY-MM-DD>.jsonl.gz`, one record per line, and `data/objects/<YYYY-MM-DD>.header.json`:
+
+```
+{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce": {"rows", "errors", "calls", "unmapped"}}}
+```
+
+`rows` is the broker's record count, `errors` lists each failure as `"<ExceptionName>: <message>"`, `calls` counts fetches including retries, and `unmapped` counts raw labels missing from `alert_monitor/labels_map.json`. A failing broker contributes no rows. When no broker returns rows, or a record fails the schema, the run fails and writes nothing.
+
 ## Running
 
 - `uv run pytest` runs the offline tests.
 - `uv run pytest -m live` calls Fink and writes today's snapshot, and calls ALeRCE for the first field.
 - `uv run python -m alert_monitor.ingest` writes today's snapshot.
+- `uv run python -m alert_monitor.ingest_all` writes today's merged objects and header.
 - `uv run python -m alert_monitor.checks.labels` runs the label checks on today's snapshot.
 - `gh workflow run daily.yml`, or **Run workflow** on the Actions tab, runs the daily job by hand.
