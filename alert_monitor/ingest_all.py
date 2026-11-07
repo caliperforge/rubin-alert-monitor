@@ -6,27 +6,36 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from alert_monitor import ingest, labels, merge
-from alert_monitor.sources import alerce, fink
+from alert_monitor.sources import alerce, fink, lasair
 
 SCHEMA = json.loads((Path(__file__).parents[1] / "tests" / "fixtures" / "sky-schema" / "object.json").read_text())
-SOURCES = {"fink": (fink.records, ingest.fetch_field), "alerce": (alerce.records, alerce.fetch_field)}
+SOURCES = {
+    "fink": (fink.records, ingest.fetch_field),
+    "alerce": (alerce.records, alerce.fetch_field),
+    "lasair": (lasair.records, lasair.fetch),
+}
 
 
 def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[dict], dict]:
     errors: list[Exception] = []
     calls = 0
+    skipped = {}
 
-    def tracked(field: dict, config: dict) -> list[dict]:
+    def tracked(*args):
         nonlocal calls
         calls += 1
         try:
-            return fetch(field, config)
+            return fetch(*args)
+        except lasair.Skipped:
+            raise
         except Exception as exc:
             errors.append(exc)
             raise
 
     try:
         got = list(records(config, at, fetch=tracked))
+    except lasair.Skipped as exc:
+        got, skipped = [], {"skipped": str(exc)}
     except Exception as exc:  # noqa: BLE001
         got = []
         if exc not in errors:
@@ -36,6 +45,7 @@ def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[di
         "errors": [f"{type(e).__name__}: {e}" for e in errors],
         "calls": calls,
         "unmapped": labels.unmapped(got).get(broker, {}),
+        **skipped,
     }
     return got, entry
 

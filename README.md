@@ -12,6 +12,12 @@ The download uses Fink's Rubin conesearch, which returns every object within a g
 
 `alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`.
 
+## Lasair source
+
+`alert_monitor/sources/lasair.py` sends `POST https://lasair-lsst.lsst.ac.uk/api/query/` for each field, with a urlencoded body: `selected` = `diaObjectId,ra,decl,nDiaSources,firstDiaSourceMjdTai,lastDiaSourceMjdTai`, `tables` = `objects`, `limit` = `n`, and `conditions` = `decl BETWEEN dec±r AND ra BETWEEN ra±r/cos(dec) AND lastDiaSourceMjdTai > <now, MJD TAI> - 1`, where `r` is `radius` in degrees. It then sends `POST https://lasair-lsst.lsst.ac.uk/api/sherlock/object/` with `objectIds` (10 ids per call, in query order) and `lite=true`, and takes each object's Sherlock class as its label. The request and response shapes are the ones issue #7 documents. They have not yet been checked against the ZTF host, `https://lasair-ztf.lsst.ac.uk/api/`.
+
+Every call needs a token. The token is read only from the `LASAIR_LSST_TOKEN` environment variable, which the daily workflow sets from the repository secret of the same name. A daily run makes `fields × (1 + n/10)` = 44 calls, under the token's limit of 100 calls per hour, and any config that would make 90 or more calls is refused. The header entry gains `"skipped": "no token"` when the variable is empty or unset, or `"skipped": "host unreachable"` when the host's TLS certificate fails verification. Verification is never turned off.
+
 ## Fields
 
 A field is one patch of sky: a centre given as right ascension (`ra`) and declination (`dec`), in degrees. The fields are set in `alert_monitor/fields.json`, and each is searched within a radius of 3600 arcseconds, keeping at most 100 objects (`n`):
@@ -56,14 +62,14 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 
 ## Daily run
 
-`.github/workflows/daily.yml` runs the snapshot and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json.gz`, `results/label_sanity.jsonl` and `results/label_sanity.md` to main. When no field returns rows, or the gzipped snapshot is over 50 MB, the job fails and commits nothing.
+`.github/workflows/daily.yml` runs the snapshot, `ingest_all` and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json.gz`, `data/objects`, `results/label_sanity.jsonl` and `results/label_sanity.md` to main. When no field returns rows, or the gzipped snapshot is over 50 MB, the job fails and commits nothing.
 
 ## Combined run
 
-`uv run python -m alert_monitor.ingest_all` fetches Fink and ALeRCE, merges their records, validates each against the sky-schema object schema, and writes `data/objects/<YYYY-MM-DD>.jsonl.gz`, one record per line, and `data/objects/<YYYY-MM-DD>.header.json`:
+`uv run python -m alert_monitor.ingest_all` fetches Fink, ALeRCE and Lasair, merges their records, validates each against the sky-schema object schema, and writes `data/objects/<YYYY-MM-DD>.jsonl.gz`, one record per line, and `data/objects/<YYYY-MM-DD>.header.json`:
 
 ```
-{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce": {"rows", "errors", "calls", "unmapped"}}}
+{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce" | "lasair": {"rows", "errors", "calls", "unmapped", "skipped"?}}}
 ```
 
 `rows` is the broker's record count, `errors` lists each failure as `"<ExceptionName>: <message>"`, `calls` counts fetches including retries, and `unmapped` counts raw labels missing from `alert_monitor/labels_map.json`. A failing broker contributes no rows. When no broker returns rows, or a record fails the schema, the run fails and writes nothing.
@@ -71,7 +77,7 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 ## Running
 
 - `uv run pytest` runs the offline tests.
-- `uv run pytest -m live` calls Fink and writes today's snapshot, and calls ALeRCE for the first field.
+- `uv run pytest -m live` calls Fink and writes today's snapshot, and calls ALeRCE and Lasair for the first field.
 - `uv run python -m alert_monitor.ingest` writes today's snapshot.
 - `uv run python -m alert_monitor.ingest_all` writes today's merged objects and header.
 - `uv run python -m alert_monitor.checks.labels` runs the label checks on today's snapshot.
