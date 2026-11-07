@@ -2,12 +2,12 @@
 name = "rubin-alert-monitor"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["astropy>=7", "jsonschema>=4", "scipy>=1.13"]
+dependencies = ["alerce>=2.4", "astropy>=7", "jsonschema>=4", "scipy>=1.13"]
 
 [dependency-groups]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
-markers = ["live: calls Fink's public API"]
+markers = ["live: calls Fink's and ALeRCE's public APIs"]
 addopts = "-m 'not live'"
 pythonpath = ["."]

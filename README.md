@@ -8,6 +8,10 @@ To rerun it, use the commands under [Running](#running), or run the daily workfl
 
 The download uses Fink's Rubin conesearch, which returns every object within a given radius of a point in the sky: `POST https://api.lsst.fink-portal.org/api/v1/conesearch` with a JSON body, `kind: across` and `output-format: json`.
 
+## ALeRCE source
+
+`alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`.
+
 ## Fields
 
 A field is one patch of sky: a centre given as right ascension (`ra`) and declination (`dec`), in degrees. The fields are set in `alert_monitor/fields.json`, and each is searched within a radius of 3600 arcseconds, keeping at most 100 objects (`n`):
@@ -57,7 +61,7 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 ## Running
 
 - `uv run pytest` runs the offline tests.
-- `uv run pytest -m live` calls Fink and writes today's snapshot.
+- `uv run pytest -m live` calls Fink and writes today's snapshot, and calls ALeRCE for the first field.
 - `uv run python -m alert_monitor.ingest` writes today's snapshot.
 - `uv run python -m alert_monitor.checks.labels` runs the label checks on today's snapshot.
 - `gh workflow run daily.yml`, or **Run workflow** on the Actions tab, runs the daily job by hand.

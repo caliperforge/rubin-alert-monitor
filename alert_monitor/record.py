@@ -36,8 +36,8 @@ def from_fink(row: dict, at: str) -> dict:
 
 def from_alerce(row: dict, at: str) -> dict:
     return _far(
-        "alerce", row["oid"], row["meanra"], row["meandec"], row["firstmjd"], row["lastmjd"], row["ndet"],
-        {"label": normalise("alerce", row["class"]), "raw": row["class"], "score": row["probability"], "at": at},
+        "alerce", row["oid"], row["meanra"], row["meandec"], row["firstmjd"], row["lastmjd"], row["n_det"],
+        {"label": normalise("alerce", row["class_name"]), "raw": row["class_name"], "score": row["probability"], "at": at},
     )
 
 

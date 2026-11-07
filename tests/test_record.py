@@ -10,7 +10,7 @@ AT = "2026-10-18T06:00:00Z"
 FIRST, LAST = "2026-10-06T23:59:23.000Z", "2026-10-16T23:59:23.000Z"
 ALERCE = {
     "oid": "ZTF26abcdxyz", "meanra": 150.6612, "meandec": 0.8503, "firstmjd": 61320.0, "lastmjd": 61330.0,
-    "ndet": 3, "class": "SNIa", "probability": 0.9,
+    "n_det": 3, "class_name": "SN", "probability": 0.9,
 }
 LASAIR = {
     "diaObjectId": 170028, "ra": 150.6612, "decl": 0.8503, "firstDiaSourceMjdTai": 61320.0,
@@ -39,7 +39,7 @@ def test_from_fink_null_first_detection():
 
 
 def test_from_alerce():
-    assert record.from_alerce(ALERCE, AT) == far("alerce", "ZTF26abcdxyz", "sn", "SNIa", 0.9)
+    assert record.from_alerce(ALERCE, AT) == far("alerce", "ZTF26abcdxyz", "sn", "SN", 0.9)
 
 
 def test_from_lasair():
