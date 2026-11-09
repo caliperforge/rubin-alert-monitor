@@ -55,7 +55,14 @@ def test_failing_broker_recorded_other_writes(tmp_path):
     path = ingest_all.run(CONFIG, AT, out, sources(alerce_fetch=timeout))
     lines = gzip.decompress(path.read_bytes()).decode().splitlines()
     assert [json.loads(line) for line in lines] == merge.merge(list(fink.records(CONFIG, AT, fetch=fink_replay)))
-    assert header(out)["brokers"]["alerce"] == {"rows": 0, "errors": ["TimeoutError: timed out"], "calls": 1, "unmapped": {}}
+    assert header(out)["brokers"]["alerce"] == {
+        "rows": 0,
+        "errors": ["TimeoutError: timed out"],
+        "calls": 1,
+        "unmapped": {},
+        "pages": {},
+        "truncated": False,
+    }
 
 
 def test_all_brokers_failing_raises_and_writes_nothing(tmp_path):
@@ -92,9 +99,22 @@ def test_header_per_broker(tmp_path):
                 "errors": [],
                 "calls": len(FIELDS),
                 "unmapped": {k: n for k, n in alerce_raw.items() if k not in labels.TABLE["alerce"]},
+                "pages": {f"{f['ra']},{f['dec']}": 1 for f in FIELDS},
+                "truncated": False,
             },
         },
     }
+
+
+def test_alerce_cap_marks_truncated(tmp_path):
+    def full(field, config):
+        return [{**ALERCE[0], "oid": f"cap{i}"} for i in range(50)] if field == FIELDS[0] else []
+
+    out = tmp_path / "objects"
+    ingest_all.run({**CONFIG, "n": 1}, AT, out, sources(alerce_fetch=full))
+    entry = header(out)["brokers"]["alerce"]
+    assert entry["pages"]["150.66,0.85"] == 50
+    assert entry["truncated"] is True
 
 
 def test_invalid_record_refused(tmp_path):

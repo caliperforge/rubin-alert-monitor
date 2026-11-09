@@ -10,7 +10,7 @@ The download uses Fink's Rubin conesearch, which returns every object within a g
 
 ## ALeRCE source
 
-`alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`.
+`alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size, page)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`. For each field it asks for `page` 1, 2, … and stops after the first page with fewer than `n` rows, or after page 50 (5,000 rows per field at `n` = 100).
 
 ## Lasair source
 
@@ -69,10 +69,10 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 `uv run python -m alert_monitor.ingest_all` fetches Fink, ALeRCE and Lasair, merges their records, validates each against the sky-schema object schema, and writes `data/objects/<YYYY-MM-DD>.jsonl.gz`, one record per line, and `data/objects/<YYYY-MM-DD>.header.json`:
 
 ```
-{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce" | "lasair": {"rows", "errors", "calls", "unmapped", "skipped"?}}}
+{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce" | "lasair": {"rows", "errors", "calls", "unmapped", "pages"?, "truncated"?, "skipped"?}}}
 ```
 
-`rows` is the broker's record count, `errors` lists each failure as `"<ExceptionName>: <message>"`, `calls` counts fetches including retries, and `unmapped` counts raw labels missing from `alert_monitor/labels_map.json`. A failing broker contributes no rows. When no broker returns rows, or a record fails the schema, the run fails and writes nothing.
+`rows` is the broker's record count, `errors` lists each failure as `"<ExceptionName>: <message>"`, `calls` counts fetches including retries, and `unmapped` counts raw labels missing from `alert_monitor/labels_map.json`. The ALeRCE entry adds `pages`, the pages fetched for each `"<ra>,<dec>"` field, and `truncated`, true when a field stopped at the 50-page cap. A failing broker contributes no rows. When no broker returns rows, or a record fails the schema, the run fails and writes nothing.
 
 ## Running
 

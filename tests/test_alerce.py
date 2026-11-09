@@ -40,7 +40,38 @@ def test_fetch_refuses_non_list(monkeypatch):
     monkeypatch.setattr(alerce, "Alerce", Client)
     with pytest.raises(ValueError, match="expected a JSON list, got NoneType"):
         alerce.fetch_field(CONFIG["fields"][0], CONFIG)
-    assert calls == [{"survey": "lsst", "format": "json", "ra": 150.66, "dec": 0.85, "radius": 3600, "page_size": 100}]
+    assert calls == [
+        {"survey": "lsst", "format": "json", "ra": 150.66, "dec": 0.85, "radius": 3600, "page_size": 100, "page": 1}
+    ]
+
+
+@pytest.mark.parametrize("short", [0, 1])
+def test_fetch_stops_on_short_page(monkeypatch, short):
+    pages = []
+
+    class Client:
+        def query_objects(self, **kwargs):
+            pages.append(kwargs["page"])
+            return [{"page": kwargs["page"]}] * (kwargs["page_size"] if kwargs["page"] < 3 else short)
+
+    monkeypatch.setattr(alerce, "Alerce", Client)
+    got = alerce.fetch_field(CONFIG["fields"][0], CONFIG)
+    assert pages == [1, 2, 3]
+    assert got == [{"page": 1}] * CONFIG["n"] + [{"page": 2}] * CONFIG["n"] + [{"page": 3}] * short
+
+
+def test_fetch_stops_at_page_cap(monkeypatch):
+    pages = []
+
+    class Client:
+        def query_objects(self, **kwargs):
+            pages.append(kwargs["page"])
+            return [{}] * kwargs["page_size"]
+
+    monkeypatch.setattr(alerce, "Alerce", Client)
+    got = alerce.fetch_field(CONFIG["fields"][0], CONFIG)
+    assert pages == list(range(1, 51))
+    assert len(got) == 50 * CONFIG["n"]
 
 
 @pytest.mark.live

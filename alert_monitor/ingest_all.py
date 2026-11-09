@@ -19,18 +19,21 @@ SOURCES = {
 def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[dict], dict]:
     errors: list[Exception] = []
     calls = 0
+    sizes: list[int] = []
     skipped = {}
 
     def tracked(*args):
         nonlocal calls
         calls += 1
         try:
-            return fetch(*args)
+            result = fetch(*args)
         except lasair.Skipped:
             raise
         except Exception as exc:
             errors.append(exc)
             raise
+        sizes.append(len(result))
+        return result
 
     try:
         got = list(records(config, at, fetch=tracked))
@@ -45,6 +48,7 @@ def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[di
         "errors": [f"{type(e).__name__}: {e}" for e in errors],
         "calls": calls,
         "unmapped": labels.unmapped(got).get(broker, {}),
+        **(alerce.paging(sizes, config) if broker == "alerce" else {}),
         **skipped,
     }
     return got, entry
