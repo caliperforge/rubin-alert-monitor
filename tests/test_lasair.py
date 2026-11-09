@@ -96,7 +96,7 @@ def test_host_failure_recorded_other_brokers_write(monkeypatch, tmp_path, token,
     brokers = run(tmp_path, lasair.fetch)
     assert brokers["lasair"] == entry
     assert brokers["alerce"]["rows"] == len(ALERCE)
-    assert seen == [(lasair.HOST + "query/", "Token test-token", ingest.TIMEOUT)]
+    assert seen == [("https://lasair.lsst.ac.uk/api/query/", "Token test-token", ingest.TIMEOUT)]
 
 
 @pytest.mark.live
