@@ -1,0 +1,1 @@
+{"date": "2026-11-09", "brokers": {"fink": {"rows": 230607, "errors": [], "calls": 4, "unmapped": {}}, "alerce": {"rows": 400, "errors": [], "calls": 4, "unmapped": {"nuclear": 31, "off-nuclear": 32, "bogus": 3}}, "lasair": {"rows": 0, "errors": [], "calls": 1, "unmapped": {}, "skipped": "host unreachable"}}}
