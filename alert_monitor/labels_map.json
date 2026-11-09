@@ -1,6 +1,6 @@
 {
   "fink": {"11": "sn", "12": "unknown", "13": "unknown", "21": "variable", "22": "agn", "-1": "unknown", "is_sso": "moving"},
-  "alerce": {"SN": "sn", "asteroid": "moving"},
+  "alerce": {"SN": "sn", "asteroid": "moving", "nuclear": "nuclear", "off-nuclear": "unknown", "bogus": "unknown", "VS": "variable", "AGN": "agn"},
   "lasair": {
     "SN": "sn", "Possible Supernova": "sn", "NT": "nuclear", "Nuclear Transient": "nuclear", "AGN": "agn", "Active Galaxy": "agn",
     "VS": "variable", "CV": "variable", "BS": "variable", "ORPHAN": "unknown", "UNCLEAR": "unknown"
