@@ -32,7 +32,8 @@ def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[di
         except Exception as exc:
             errors.append(exc)
             raise
-        sizes.append(len(result))
+        if broker == "alerce":
+            sizes.append(len(result))
         return result
 
     try:
