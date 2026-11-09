@@ -12,6 +12,8 @@ The download uses Fink's Rubin conesearch, which returns every object within a g
 
 `alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`.
 
+ALeRCE's classes come from `Alerce().query_classes("stamp_classifier_rubin_beta", "2.0.1", survey="lsst")`, which sends `GET https://api-lsst.alerce.online/classifier_api/classes` (alerce_client@12f613a95340499dab89af5c5bf5416e3e1deb29 `alerce/default_config.json`). `alert_monitor/labels_map.json` maps them as `SN` → `sn`, `asteroid` → `moving`, `nuclear` → `nuclear`, `off-nuclear` → `unknown`, `bogus` → `unknown`, `VS` → `variable` and `AGN` → `agn`. Off-nuclear transients are mostly supernovae, but a label that only gives a location is not promoted to a class.
+
 ## Lasair source
 
 `alert_monitor/sources/lasair.py` sends `POST https://lasair.lsst.ac.uk/api/query/` for each field, with a urlencoded body: `selected` = `diaObjectId,ra,decl,nDiaSources,firstDiaSourceMjdTai,lastDiaSourceMjdTai`, `tables` = `objects`, `limit` = `n`, and `conditions` = `decl BETWEEN dec±r AND ra BETWEEN ra±r/cos(dec) AND lastDiaSourceMjdTai > <now, MJD TAI> - 1`, where `r` is `radius` in degrees. It then sends `POST https://lasair.lsst.ac.uk/api/sherlock/object/` with `objectIds` (10 ids per call, in query order) and `lite=true`, and takes each object's Sherlock class as its label. The request and response shapes are the ones issue #7 documents. They have not yet been checked against the ZTF host, `https://lasair-ztf.lsst.ac.uk/api/`.

@@ -20,8 +20,8 @@ def test_fixture_replays_into_valid_records(valid):
         valid(r)
 
 
-def test_every_map_key_is_a_fixture_class():
-    assert set(labels.TABLE["alerce"]) <= {row["class_name"] for row in FIXTURE}
+def test_every_fixture_class_is_mapped():
+    assert {row["class_name"] for row in FIXTURE} <= set(labels.TABLE["alerce"])
 
 
 def test_unmapped_class_is_unknown():
