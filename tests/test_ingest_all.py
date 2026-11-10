@@ -62,6 +62,7 @@ def test_failing_broker_recorded_other_writes(tmp_path):
         "unmapped": {},
         "pages": {},
         "truncated": False,
+        "lastmjd": {f"{f['ra']},{f['dec']}": None for f in FIELDS},
     }
 
 
@@ -101,6 +102,9 @@ def test_header_per_broker(tmp_path):
                 "unmapped": {k: n for k, n in alerce_raw.items() if k not in labels.TABLE["alerce"]},
                 "pages": {f"{f['ra']},{f['dec']}": 1 for f in FIELDS},
                 "truncated": False,
+                "lastmjd": {
+                    f"{f['ra']},{f['dec']}": max(r["lastmjd"] for r in ALERCE) if f == FIELDS[0] else None for f in FIELDS
+                },
             },
         },
     }
@@ -115,6 +119,46 @@ def test_alerce_cap_marks_truncated(tmp_path):
     entry = header(out)["brokers"]["alerce"]
     assert entry["pages"]["150.66,0.85"] == 50
     assert entry["truncated"] is True
+
+
+def previous_headers(out):
+    out.mkdir()
+    for day, mjd in [("2026-11-05", 61349.0), ("2026-11-06", 61350.0), ("2026-11-07", 61351.0)]:
+        brokers = {"alerce": {"lastmjd": {"150.66,0.85": mjd, "61.96,-48.71": mjd + 10}}}
+        (out / f"{day}.header.json").write_text(json.dumps({"date": day, "brokers": brokers}))
+
+
+def test_since_read_from_previous_day_header(tmp_path):
+    configs = []
+
+    def fetch(field, config):
+        configs.append(config)
+        return alerce_replay(field, config)
+
+    out = tmp_path / "objects"
+    previous_headers(out)
+    ingest_all.run(CONFIG, AT, out, sources(alerce_fetch=fetch))
+    assert [c.get("lastmjd", [None])[0] for c in configs] == [61350.0, 61360.0, None, None]
+    assert header(out)["brokers"]["alerce"]["lastmjd"] == {
+        "150.66,0.85": max(61350.0, *(r["lastmjd"] for r in ALERCE)),
+        "61.96,-48.71": 61360.0,
+        "9.45,-44.0": None,
+        "53.1,-28.1": None,
+    }
+
+
+def test_backfill_ignores_previous_header(tmp_path):
+    configs = []
+
+    def fetch(field, config):
+        configs.append(config)
+        return alerce_replay(field, config)
+
+    out = tmp_path / "objects"
+    previous_headers(out)
+    ingest_all.run(CONFIG, AT, out, sources(alerce_fetch=fetch), backfill=True)
+    assert {(c["since"], c["backfill"]) for c in configs} == {(None, True)}
+    assert all("lastmjd" not in c for c in configs)
 
 
 def test_invalid_record_refused(tmp_path):

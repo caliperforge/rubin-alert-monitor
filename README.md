@@ -10,7 +10,9 @@ The download uses Fink's Rubin conesearch, which returns every object within a g
 
 ## ALeRCE source
 
-`alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size, page)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`. For each field it asks for `page` 1, 2, … and stops after the first page with fewer than `n` rows, or after page 50 (5,000 rows per field at `n` = 100).
+`alert_monitor/sources/alerce.py` uses the `alerce` client: `Alerce().query_objects(survey="lsst", format="json", ra, dec, radius, page_size, page, order_by="lastmjd", order_mode="ASC", lastmjd)`, with `radius` and `page_size` set from `radius` and `n` in `alert_monitor/fields.json`. It sends `GET https://api-lsst.alerce.online/object_api/list_objects`. For each field it asks for `page` 1, 2, … and stops after the first page with fewer than `n` rows, or after page 50 (5,000 rows per field at `n` = 100).
+
+Each field's `lastmjd` is `[<that field's lastmjd in the newest earlier header>, <now, MJD TAI>]`, so a daily run fetches only objects last detected since the previous run, oldest first. The LSST endpoint accepts `lastmjd` (alerce_client@12f613a95340499dab89af5c5bf5416e3e1deb29 `alerce/ms_search.py:39`). When no earlier header has a `lastmjd` for the field, it is left out and the field's whole cone is fetched up to the cap. `--backfill` leaves it out too and pages each whole cone until a short page, with no cap.
 
 ALeRCE's classes come from `Alerce().query_classes("stamp_classifier_rubin_beta", "2.0.1", survey="lsst")`, which sends `GET https://api-lsst.alerce.online/classifier_api/classes` (alerce_client@12f613a95340499dab89af5c5bf5416e3e1deb29 `alerce/default_config.json`). `alert_monitor/labels_map.json` maps them as `SN` → `sn`, `asteroid` → `moving`, `nuclear` → `nuclear`, `off-nuclear` → `unknown`, `bogus` → `unknown`, `VS` → `variable` and `AGN` → `agn`. Off-nuclear transients are mostly supernovae, but a label that only gives a location is not promoted to a class.
 
@@ -71,16 +73,17 @@ The table at the end of `results/label_sanity.md` compares each of today's share
 `uv run python -m alert_monitor.ingest_all` fetches Fink, ALeRCE and Lasair, merges their records, validates each against the sky-schema object schema, and writes `data/objects/<YYYY-MM-DD>.jsonl.gz`, one record per line, and `data/objects/<YYYY-MM-DD>.header.json`:
 
 ```
-{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce" | "lasair": {"rows", "errors", "calls", "unmapped", "pages"?, "truncated"?, "skipped"?}}}
+{"date": "<YYYY-MM-DD>", "brokers": {"fink" | "alerce" | "lasair": {"rows", "errors", "calls", "unmapped", "pages"?, "truncated"?, "lastmjd"?, "skipped"?}}}
 ```
 
-`rows` is the broker's record count, `errors` lists each failure as `"<ExceptionName>: <message>"`, `calls` counts fetches including retries, and `unmapped` counts raw labels missing from `alert_monitor/labels_map.json`. The ALeRCE entry adds `pages`, the pages fetched for each `"<ra>,<dec>"` field, and `truncated`, true when a field stopped at the 50-page cap. A failing broker contributes no rows. When no broker returns rows, or a record fails the schema, the run fails and writes nothing.
+`rows` is the broker's record count, `errors` lists each failure as `"<ExceptionName>: <message>"`, `calls` counts fetches including retries, and `unmapped` counts raw labels missing from `alert_monitor/labels_map.json`. The ALeRCE entry adds `pages`, the pages fetched for each `"<ra>,<dec>"` field, `truncated`, true when a field stopped at the 50-page cap, and `lastmjd`, kept per field: the newest last-detection MJD it returned for each `"<ra>,<dec>"` field, never lower than the previous header's. When ALeRCE records an error, each field's `lastmjd` keeps the previous header's value. A failing broker contributes no rows. When no broker returns rows, or a record fails the schema, the run fails and writes nothing.
 
 ## Running
 
 - `uv run pytest` runs the offline tests.
-- `uv run pytest -m live` calls Fink and writes today's snapshot, and calls ALeRCE and Lasair for the first field.
+- `uv run pytest -m live` calls Fink and writes today's snapshot, calls ALeRCE for the second field, and calls Lasair for the first field.
 - `uv run python -m alert_monitor.ingest` writes today's snapshot.
 - `uv run python -m alert_monitor.ingest_all` writes today's merged objects and header.
+- `uv run python -m alert_monitor.ingest_all --backfill` does the same, fetching each whole ALeRCE cone without the page cap.
 - `uv run python -m alert_monitor.checks.labels` runs the label checks on today's snapshot.
 - `gh workflow run daily.yml`, or **Run workflow** on the Actions tab, runs the daily job by hand.

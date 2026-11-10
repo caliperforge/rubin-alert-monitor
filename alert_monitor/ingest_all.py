@@ -1,5 +1,6 @@
 import gzip
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,7 +20,7 @@ SOURCES = {
 def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[dict], dict]:
     errors: list[Exception] = []
     calls = 0
-    sizes: list[int] = []
+    results: list[list[dict]] = []
     skipped = {}
 
     def tracked(*args):
@@ -33,7 +34,7 @@ def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[di
             errors.append(exc)
             raise
         if broker == "alerce":
-            sizes.append(len(result))
+            results.append(result)
         return result
 
     try:
@@ -49,13 +50,18 @@ def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[di
         "errors": [f"{type(e).__name__}: {e}" for e in errors],
         "calls": calls,
         "unmapped": labels.unmapped(got).get(broker, {}),
-        **(alerce.paging(sizes, config) if broker == "alerce" else {}),
+        **(alerce.paging(results, config, bool(errors)) if broker == "alerce" else {}),
         **skipped,
     }
     return got, entry
 
 
-def run(config: dict, at: str, out_dir: Path = Path("data/objects"), sources=SOURCES) -> Path:
+def run(config: dict, at: str, out_dir: Path = Path("data/objects"), sources=SOURCES, backfill=False) -> Path:
+    previous = sorted(p for p in out_dir.glob("*.header.json") if p.name[:10] < at[:10])
+    since = None
+    if previous and not backfill:
+        since = json.loads(previous[-1].read_text())["brokers"].get("alerce", {}).get("lastmjd")
+    config = {**config, "since": since, "backfill": backfill}
     got, brokers = [], {}
     for broker, (records, fetch) in sources.items():
         rows, brokers[broker] = _broker(broker, records, fetch, config, at)
@@ -75,4 +81,4 @@ def run(config: dict, at: str, out_dir: Path = Path("data/objects"), sources=SOU
 
 
 if __name__ == "__main__":
-    run(ingest.load_config(), datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    run(ingest.load_config(), datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), backfill="--backfill" in sys.argv)
