@@ -10,7 +10,7 @@ from astropy.time import Time
 
 from alert_monitor import ingest, record
 
-HOST = "https://lasair.lsst.ac.uk/api/"
+HOST = "https://api.lasair.lsst.ac.uk/api/"
 SELECTED = "diaObjectId,ra,decl,nDiaSources,firstDiaSourceMjdTai,lastDiaSourceMjdTai"
 
 
