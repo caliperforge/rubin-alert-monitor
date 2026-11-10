@@ -42,6 +42,16 @@ def header(out):
     return json.loads((out / "2026-11-07.header.json").read_text())
 
 
+def records():
+    return list(fink.records(CONFIG, AT, fetch=fink_replay))
+
+
+def write_day(out, day, brokers, rows=()):
+    out.mkdir(exist_ok=True)
+    (out / f"{day}.header.json").write_text(json.dumps({"date": day, "brokers": brokers}))
+    (out / f"{day}.jsonl.gz").write_bytes(gzip.compress("".join(json.dumps(r) + "\n" for r in rows).encode()))
+
+
 def test_fink_records_validate(valid):
     got = list(fink.records(CONFIG, AT, fetch=fink_replay))
     ids = dict.fromkeys(str(r["r:diaObjectId"]) for f in FIELDS for r in fink_replay(f, CONFIG))
@@ -63,6 +73,9 @@ def test_failing_broker_recorded_other_writes(tmp_path):
         "pages": {},
         "truncated": False,
         "lastmjd": {f"{f['ra']},{f['dec']}": None for f in FIELDS},
+        "newest": None,
+        "new_ids": 0,
+        "stale": False,
     }
 
 
@@ -86,6 +99,7 @@ def test_header_per_broker(tmp_path):
     fink_rows = ingest.snapshot(date(2026, 11, 7), CONFIG, fink_replay)["rows"]
     fink_raw = Counter(str(r["f:main_label_classifier"]) for r in fink_rows)
     alerce_raw = Counter(r["class_name"] for r in ALERCE)
+    fink_got, alerce_got = records(), list(alerce.records(CONFIG, AT, fetch=alerce_replay))
     assert header(out) == {
         "date": "2026-11-07",
         "brokers": {
@@ -94,6 +108,9 @@ def test_header_per_broker(tmp_path):
                 "errors": ["TimeoutError: timed out"],
                 "calls": len(FIELDS) + 1,
                 "unmapped": {k: n for k, n in fink_raw.items() if k not in labels.TABLE["fink"]},
+                "newest": max(r["t_last"] for r in fink_got),
+                "new_ids": len({r["id"] for r in fink_got}),
+                "stale": False,
             },
             "alerce": {
                 "rows": len(ALERCE),
@@ -105,6 +122,9 @@ def test_header_per_broker(tmp_path):
                 "lastmjd": {
                     f"{f['ra']},{f['dec']}": max(r["lastmjd"] for r in ALERCE) if f == FIELDS[0] else None for f in FIELDS
                 },
+                "newest": max(r["t_last"] for r in alerce_got),
+                "new_ids": len({r["id"] for r in alerce_got}),
+                "stale": False,
             },
         },
     }
@@ -122,10 +142,51 @@ def test_alerce_cap_marks_truncated(tmp_path):
 
 
 def previous_headers(out):
-    out.mkdir()
     for day, mjd in [("2026-11-05", 61349.0), ("2026-11-06", 61350.0), ("2026-11-07", 61351.0)]:
-        brokers = {"alerce": {"lastmjd": {"150.66,0.85": mjd, "61.96,-48.71": mjd + 10}}}
-        (out / f"{day}.header.json").write_text(json.dumps({"date": day, "brokers": brokers}))
+        write_day(out, day, {"alerce": {"lastmjd": {"150.66,0.85": mjd, "61.96,-48.71": mjd + 10}}})
+
+
+def test_same_newest_is_stale_with_no_new_ids(tmp_path):
+    out = tmp_path / "objects"
+    write_day(out, "2026-11-06", {"fink": {"newest": max(r["t_last"] for r in records())}}, records())
+    ingest_all.run(CONFIG, AT, out, sources())
+    entry = header(out)["brokers"]["fink"]
+    assert (entry["stale"], entry["new_ids"]) == (True, 0)
+
+
+@pytest.mark.parametrize("before", [{"fink": {"newest": "2000-01-01T00:00:00.000Z"}}, {"fink": {}}, None])
+def test_moved_newest_counts_new_ids(tmp_path, before):
+    ids = list(dict.fromkeys(r["id"] for r in records()))
+    out = tmp_path / "objects"
+    if before is not None:
+        write_day(out, "2026-11-06", before, [r for r in records() if r["id"] not in ids[:3]])
+    ingest_all.run(CONFIG, AT, out, sources())
+    entry = header(out)["brokers"]["fink"]
+    assert (entry["stale"], entry["new_ids"]) == (False, len(ids) if before is None else 3)
+
+
+def stale_days(out, stale):
+    newest = max(r["t_last"] for r in records())
+    for day, s in zip(["2026-11-05", "2026-11-06"], stale, strict=True):
+        write_day(out, day, {"fink": {"newest": newest, "stale": s}})
+
+
+def test_stale_three_days_named_in_summary(tmp_path, capsys):
+    out = tmp_path / "objects"
+    stale_days(out, [True, True])
+    ingest_all.run(CONFIG, AT, out, sources())
+    brokers = header(out)["brokers"]
+    fink_new, alerce_new = brokers["fink"]["new_ids"], brokers["alerce"]["new_ids"]
+    assert capsys.readouterr().out == f"2026-11-07: fink {fink_new} new, alerce {alerce_new} new; stale 3 days: fink\n"
+
+
+@pytest.mark.parametrize(("stale", "alerce_fetch"), [([False, True], alerce_replay), ([True, True], timeout)])
+def test_stale_two_days_or_nothing_moved_not_named(tmp_path, capsys, stale, alerce_fetch):
+    out = tmp_path / "objects"
+    stale_days(out, stale)
+    ingest_all.run(CONFIG, AT, out, sources(alerce_fetch=alerce_fetch))
+    assert header(out)["brokers"]["fink"]["stale"] is True
+    assert "stale 3 days" not in capsys.readouterr().out
 
 
 def test_since_read_from_previous_day_header(tmp_path):

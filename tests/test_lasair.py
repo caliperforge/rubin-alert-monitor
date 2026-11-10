@@ -18,6 +18,7 @@ CONFIG = ingest.load_config()
 FIELD0 = {**CONFIG, "fields": CONFIG["fields"][:1]}
 AT = "2026-11-07T06:00:00Z"
 IDS = [str(row["diaObjectId"]) for row in QUERY]
+NO_ROWS = {"newest": None, "new_ids": 0, "stale": False}
 
 
 @pytest.fixture
@@ -74,15 +75,15 @@ def test_no_token_skips_before_any_call(monkeypatch, tmp_path, value):
     calls = []
     with pytest.raises(lasair.Skipped, match="no token"):
         list(lasair.records(FIELD0, AT, fetch=replay(calls)))
-    assert run(tmp_path, replay(calls))["lasair"] == {"rows": 0, "errors": [], "calls": 0, "unmapped": {}, "skipped": "no token"}
+    assert run(tmp_path, replay(calls))["lasair"] == {"rows": 0, "errors": [], "calls": 0, "unmapped": {}, "skipped": "no token", **NO_ROWS}
     assert calls == []
 
 
 @pytest.mark.parametrize(
     ("reason", "entry"),
     [
-        (ssl.SSLCertVerificationError(), {"rows": 0, "errors": [], "calls": 1, "unmapped": {}, "skipped": "host unreachable"}),
-        ("refused", {"rows": 0, "errors": ["URLError: <urlopen error refused>"], "calls": 1, "unmapped": {}}),
+        (ssl.SSLCertVerificationError(), {"rows": 0, "errors": [], "calls": 1, "unmapped": {}, "skipped": "host unreachable", **NO_ROWS}),
+        ("refused", {"rows": 0, "errors": ["URLError: <urlopen error refused>"], "calls": 1, "unmapped": {}, **NO_ROWS}),
     ],
 )
 def test_host_failure_recorded_other_brokers_write(monkeypatch, tmp_path, token, reason, entry):
