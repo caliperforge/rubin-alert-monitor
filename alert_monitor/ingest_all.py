@@ -75,14 +75,13 @@ def _summary(day: str, brokers: dict, headers: list[dict]) -> str:
 def run(config: dict, at: str, out_dir: Path = Path("data/objects"), sources=SOURCES, backfill=False) -> Path:
     previous = sorted(p for p in out_dir.glob("*.header.json") if p.name[:10] < at[:10])
     headers = [json.loads(p.read_text())["brokers"] for p in previous]
-    since = None
-    if headers and not backfill:
-        since = headers[-1].get("alerce", {}).get("lastmjd")
+    last = headers[-1].get("alerce", {}) if headers else {}
+    since = None if backfill else last.get("lastmjd")
     seen: set[str] = set()
     if previous:
         day = gzip.decompress((out_dir / f"{previous[-1].name[:10]}.jsonl.gz").read_bytes()).decode()
         seen = {json.loads(line)["id"] for line in day.splitlines()}
-    config = {**config, "since": since, "backfill": backfill}
+    config = {**config, "since": since, "backfill": backfill, "gap": last.get("gap")}
     got, brokers = [], {}
     for broker, (records, fetch) in sources.items():
         rows, brokers[broker] = _broker(broker, records, fetch, config, at)

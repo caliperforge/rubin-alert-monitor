@@ -52,9 +52,26 @@ def test_fetch_refuses_non_list(monkeypatch):
             "page_size": 100,
             "page": 1,
             "order_by": "lastmjd",
-            "order_mode": "ASC",
+            "order_mode": "DESC",
         }
     ]
+
+
+def test_fetch_newest_first_stops_at_watermark(monkeypatch):
+    calls = []
+
+    class Client:
+        def query_objects(self, **kwargs):
+            calls.append(kwargs)
+            n = kwargs["page_size"]
+            return [{"lastmjd": 61350.0 + (3 - kwargs["page"]) * 10 + (n - 1 - i) / 1000} for i in range(n)]
+
+    monkeypatch.setattr(alerce, "Alerce", Client)
+    got = alerce.fetch_field(CONFIG["fields"][0], {**CONFIG, "lastmjd": [61350.0, 61400.0]})
+    assert [c["page"] for c in calls] == [1, 2, 3]
+    assert {c["order_mode"] for c in calls} == {"DESC"}
+    assert len(got) == 3 * CONFIG["n"]
+    assert alerce.paging([got], {**FIELD0, "since": {"150.66,0.85": 61350.0}}, False)["pages"] == {"150.66,0.85": 3}
 
 
 def test_records_pass_lastmjd_range_from_since(monkeypatch):
@@ -119,13 +136,38 @@ def test_backfill_pages_past_cap_until_short_page(monkeypatch):
     }
 
 
+def test_backfill_reads_gap_oldest_first(monkeypatch):
+    calls = []
+
+    class Client:
+        def query_objects(self, **kwargs):
+            calls.append(kwargs)
+            return [{**FIXTURE[0], "lastmjd": 61000.5}] * (kwargs["page_size"] if kwargs["page"] < 60 else 0)
+
+    monkeypatch.setattr(alerce, "Alerce", Client)
+    config = {**FIELD0, "since": None, "backfill": True, "gap": {"150.66,0.85": [61000.0, 61001.0]}}
+    assert len(list(alerce.records(config, AT))) == 59 * CONFIG["n"]
+    assert [c["page"] for c in calls] == list(range(1, 61))
+    assert all(c["lastmjd"] == [61000.0, 61001.0] and c["order_mode"] == "ASC" for c in calls)
+
+
 def test_paging_newest_lastmjd_per_field():
     config = {**CONFIG, "fields": CONFIG["fields"][:3], "n": 1, "since": {"150.66,0.85": 61000.0, "61.96,-48.71": 61003.0}}
     capped = [{"lastmjd": 61000.0 + i / 100} for i in range(50)]
     got = alerce.paging([capped, [{"lastmjd": 61002.0}], []], config, False)
-    assert got["pages"] == {"150.66,0.85": 50, "61.96,-48.71": 2, "9.45,-44.0": 1}
+    assert got["pages"] == {"150.66,0.85": 50, "61.96,-48.71": 1, "9.45,-44.0": 1}
     assert got["truncated"] is True
     assert got["lastmjd"] == {"150.66,0.85": 61000.49, "61.96,-48.71": 61003.0, "9.45,-44.0": None}
+    assert "gap" not in got
+
+
+def test_paging_cap_records_gap_and_keeps_watermark():
+    config = {**CONFIG, "fields": CONFIG["fields"][:2], "n": 1, "since": {"150.66,0.85": 60999.5}}
+    capped = [{"lastmjd": 61000.0 + i / 100} for i in range(50)]
+    got = alerce.paging([capped, capped], config, False)
+    assert got["truncated"] is True
+    assert got["gap"] == {"150.66,0.85": [60999.5, 61000.0]}
+    assert got["lastmjd"] == {"150.66,0.85": 60999.5, "61.96,-48.71": 61000.49}
 
 
 def test_paging_failed_keeps_since():

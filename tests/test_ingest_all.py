@@ -222,6 +222,31 @@ def test_backfill_ignores_previous_header(tmp_path):
     assert all("lastmjd" not in c for c in configs)
 
 
+def test_capped_run_records_gap_in_header(tmp_path):
+    def full(field, config):
+        return [{**ALERCE[0], "oid": f"cap{i}", "lastmjd": 61351.0 + i / 100} for i in range(50)] if field == FIELDS[0] else []
+
+    out = tmp_path / "objects"
+    previous_headers(out)
+    ingest_all.run({**CONFIG, "n": 1}, AT, out, sources(alerce_fetch=full))
+    entry = header(out)["brokers"]["alerce"]
+    assert entry["gap"] == {"150.66,0.85": [61350.0, 61351.0]}
+    assert entry["lastmjd"]["150.66,0.85"] == 61350.0
+
+
+def test_backfill_reads_previous_header_gap(tmp_path):
+    configs = []
+
+    def fetch(field, config):
+        configs.append(config)
+        return alerce_replay(field, config)
+
+    out = tmp_path / "objects"
+    write_day(out, "2026-11-06", {"alerce": {"lastmjd": {"150.66,0.85": 61350.0}, "gap": {"150.66,0.85": [61340.0, 61345.0]}}})
+    ingest_all.run(CONFIG, AT, out, sources(alerce_fetch=fetch), backfill=True)
+    assert [c.get("lastmjd") for c in configs] == [[61340.0, 61345.0], None, None, None]
+
+
 def test_invalid_record_refused(tmp_path):
     def bad(field, config):
         rows = fink_replay(field, config)
