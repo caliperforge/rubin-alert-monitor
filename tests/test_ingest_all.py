@@ -1,10 +1,12 @@
 import gzip
 import json
 from collections import Counter
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
+from astropy.time import Time
 from jsonschema import ValidationError
 
 from alert_monitor import ingest, ingest_all, labels, merge
@@ -32,6 +34,14 @@ def alerce_replay(field, config):
 
 def timeout(field, config):
     raise TimeoutError("timed out")
+
+
+def unauthorized(field, config):
+    raise HTTPError("https://example.invalid", 401, "Unauthorized", None, None)  # pyright: ignore[reportArgumentType]
+
+
+def days_behind(newest):
+    return (datetime.fromisoformat(AT) - datetime.fromisoformat(newest)).days
 
 
 def sources(fink_fetch=fink_replay, alerce_fetch=alerce_replay):
@@ -76,6 +86,8 @@ def test_failing_broker_recorded_other_writes(tmp_path):
         "newest": None,
         "new_ids": 0,
         "stale": False,
+        "behind_days": None,
+        "behind": False,
     }
 
 
@@ -111,6 +123,8 @@ def test_header_per_broker(tmp_path):
                 "newest": max(r["t_last"] for r in fink_got),
                 "new_ids": len({r["id"] for r in fink_got}),
                 "stale": False,
+                "behind_days": days_behind(max(r["t_last"] for r in fink_got)),
+                "behind": True,
             },
             "alerce": {
                 "rows": len(ALERCE),
@@ -125,6 +139,8 @@ def test_header_per_broker(tmp_path):
                 "newest": max(r["t_last"] for r in alerce_got),
                 "new_ids": len({r["id"] for r in alerce_got}),
                 "stale": False,
+                "behind_days": days_behind(max(r["t_last"] for r in alerce_got)),
+                "behind": True,
             },
         },
     }
@@ -176,8 +192,41 @@ def test_stale_three_days_named_in_summary(tmp_path, capsys):
     stale_days(out, [True, True])
     ingest_all.run(CONFIG, AT, out, sources())
     brokers = header(out)["brokers"]
-    fink_new, alerce_new = brokers["fink"]["new_ids"], brokers["alerce"]["new_ids"]
-    assert capsys.readouterr().out == f"2026-11-07: fink {fink_new} new, alerce {alerce_new} new; stale 3 days: fink\n"
+    f, a = brokers["fink"], brokers["alerce"]
+    assert capsys.readouterr().out == (
+        f"2026-11-07: fink {f['new_ids']} new, alerce {a['new_ids']} new; stale 3 days: fink"
+        f"; behind: fink {f['behind_days']} d, alerce {a['behind_days']} d\n"
+    )
+
+
+@pytest.mark.parametrize(("ago", "days", "part"), [(328.5, 328, "; behind: alerce 328 d"), (1.5, 1, "")])
+def test_behind_over_three_days_named_in_summary(tmp_path, capsys, ago, days, part):
+    last = Time(AT[:19], format="isot", scale="utc").tai.mjd - ago  # pyright: ignore[reportAttributeAccessIssue]
+    rows = [{**r, "firstmjd": last, "lastmjd": last} for r in ALERCE]
+    out = tmp_path / "objects"
+    ingest_all.run(CONFIG, AT, out, {"alerce": (alerce.records, lambda field, config: rows if field == FIELDS[0] else [])})
+    entry = header(out)["brokers"]["alerce"]
+    assert (entry["behind_days"], entry["behind"]) == (days, days > 3)
+    assert capsys.readouterr().out == f"2026-11-07: alerce {entry['new_ids']} new{part}\n"
+
+
+@pytest.mark.parametrize(("alerce_fetch", "why"), [(unauthorized, "401"), (timeout, "TimeoutError")])
+def test_errors_without_rows_named_failing(tmp_path, capsys, alerce_fetch, why):
+    calls = []
+
+    def flaky(field, config):
+        calls.append(field)
+        if len(calls) == 1:
+            raise TimeoutError("timed out")
+        return fink_replay(field, config)
+
+    out = tmp_path / "objects"
+    ingest_all.run(CONFIG, AT, out, sources(fink_fetch=flaky, alerce_fetch=alerce_fetch))
+    f = header(out)["brokers"]["fink"]
+    assert f["errors"] == ["TimeoutError: timed out"]
+    assert capsys.readouterr().out == (
+        f"2026-11-07: fink {f['new_ids']} new, alerce 0 new; behind: fink {f['behind_days']} d; failing: alerce ({why})\n"
+    )
 
 
 @pytest.mark.parametrize(("stale", "alerce_fetch"), [([False, True], alerce_replay), ([True, True], timeout)])

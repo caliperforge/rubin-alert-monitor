@@ -1,5 +1,6 @@
 import gzip
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,10 +57,22 @@ def _broker(broker: str, records, fetch, config: dict, at: str) -> tuple[list[di
     return got, entry
 
 
-def _fresh(rows: list[dict], before: dict, seen: set[str]) -> dict:
+def _fresh(rows: list[dict], before: dict, seen: set[str], at: str) -> dict:
     newest = max((r["t_last"] for r in rows), default=None)
     stale = newest is not None and before.get("newest") is not None and newest <= before["newest"]
-    return {"newest": newest, "new_ids": len({r["id"] for r in rows} - seen), "stale": stale}
+    days = None if newest is None else (datetime.fromisoformat(at) - datetime.fromisoformat(newest)).days
+    return {
+        "newest": newest,
+        "new_ids": len({r["id"] for r in rows} - seen),
+        "stale": stale,
+        "behind_days": days,
+        "behind": days is not None and days > 3,
+    }
+
+
+def _why(error: str) -> str:
+    status = re.search(r"HTTP Error (\d+)", error)
+    return status[1] if status else error.split(":")[0]
 
 
 def _summary(day: str, brokers: dict, headers: list[dict]) -> str:
@@ -69,7 +82,14 @@ def _summary(day: str, brokers: dict, headers: list[dict]) -> str:
         if moved and e["stale"] and [h.get(b, {}).get("stale") for h in headers[-2:]] == [True, True]
     ]
     counts = ", ".join(f"{b} {e['new_ids']} new" for b, e in brokers.items())
-    return f"{day}: {counts}" + (f"; stale 3 days: {', '.join(stale)}" if stale else "")
+    behind = ", ".join(f"{b} {e['behind_days']} d" for b, e in brokers.items() if e["behind"])
+    failing = ", ".join(f"{b} ({_why(e['errors'][0])})" for b, e in brokers.items() if e["errors"] and not e["rows"])
+    return (
+        f"{day}: {counts}"
+        + (f"; stale 3 days: {', '.join(stale)}" if stale else "")
+        + (f"; behind: {behind}" if behind else "")
+        + (f"; failing: {failing}" if failing else "")
+    )
 
 
 def run(config: dict, at: str, out_dir: Path = Path("data/objects"), sources=SOURCES, backfill=False) -> Path:
@@ -85,7 +105,7 @@ def run(config: dict, at: str, out_dir: Path = Path("data/objects"), sources=SOU
     got, brokers = [], {}
     for broker, (records, fetch) in sources.items():
         rows, brokers[broker] = _broker(broker, records, fetch, config, at)
-        brokers[broker] |= _fresh(rows, headers[-1].get(broker, {}) if headers else {}, seen)
+        brokers[broker] |= _fresh(rows, headers[-1].get(broker, {}) if headers else {}, seen, at)
         got += rows
     if not got:
         raise RuntimeError(f"no broker returned rows: { {b: e['errors'] for b, e in brokers.items()} }")

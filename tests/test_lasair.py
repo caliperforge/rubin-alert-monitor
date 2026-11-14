@@ -18,7 +18,7 @@ CONFIG = ingest.load_config()
 FIELD0 = {**CONFIG, "fields": CONFIG["fields"][:1]}
 AT = "2026-11-07T06:00:00Z"
 IDS = [str(row["diaObjectId"]) for row in QUERY]
-NO_ROWS = {"newest": None, "new_ids": 0, "stale": False}
+NO_ROWS = {"newest": None, "new_ids": 0, "stale": False, "behind_days": None, "behind": False}
 
 
 @pytest.fixture
