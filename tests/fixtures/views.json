@@ -1,0 +1,23 @@
+{
+  "header": {
+    "date": "2026-11-16",
+    "brokers": {
+      "fink": {"rows": 232500, "errors": [], "calls": 4, "unmapped": {}, "newest": "2026-11-15T05:33:18.561Z", "new_ids": 0, "stale": true, "behind_days": 1, "behind": false},
+      "alerce": {"rows": 20000, "errors": [], "calls": 4, "unmapped": {}, "pages": {"53.1,-28.1": 50}, "truncated": true, "newest": "2026-11-15T05:33:18.561Z", "new_ids": 58, "stale": true, "behind_days": 1, "behind": false},
+      "lasair": {"rows": 0, "errors": ["HTTPError: HTTP Error 401: Unauthorized"], "calls": 1, "unmapped": {}, "newest": null, "new_ids": 0, "stale": false, "behind_days": null, "behind": false}
+    }
+  },
+  "objects": [
+    {"id": "one", "ra": 10.0, "dec": -1.0, "days_watched": 3.0, "labels": [{"broker": "fink", "label": "SN", "score": 0.9}], "contested": false},
+    {"id": "agree", "ra": 11.0, "dec": -2.0, "days_watched": 5.0, "labels": [{"broker": "fink", "label": "SN", "score": 0.8}, {"broker": "alerce", "label": "SN", "score": 0.7}], "contested": false},
+    {"id": "contested-low", "ra": 12.0, "dec": -3.0, "days_watched": 7.0, "labels": [{"broker": "fink", "label": "SN", "score": 0.4}, {"broker": "alerce", "label": "AGN", "score": 0.3}], "contested": true},
+    {"id": "contested-null", "ra": 13.0, "dec": -4.0, "days_watched": 9.0, "labels": [{"broker": "fink", "label": "SN", "score": null}, {"broker": "lasair", "label": "AGN", "score": null}], "contested": true},
+    {"id": "contested-high", "ra": 14.0, "dec": -5.0, "days_watched": 11.0, "labels": [{"broker": "alerce", "label": "SN", "score": 0.95}, {"broker": "lasair", "label": "AGN", "score": null}], "contested": true}
+  ],
+  "sanity": [
+    {"date": "2026-11-16", "check": "sn_share", "value": {"overall": 0.8, "detections": {"2-4": 0.9, "5-9": 0.8, "10-49": 0.7, "50+": 0.6}, "days": {"<30": 0.95, "30-99": 0.75, "100-199": 0.5, "200+": 0.2}}, "n": 100, "examples": []},
+    {"date": "2026-11-15", "check": "sn_share", "value": {"overall": 0.1, "detections": {"2-4": 0.1, "5-9": 0.1, "10-49": 0.1, "50+": 0.1}, "days": {"<30": 0.1, "30-99": 0.1, "100-199": 0.1, "200+": 0.1}}, "n": 10, "examples": []},
+    {"date": "2026-11-14", "check": "crossmatch_fail", "value": 0.75, "n": 100, "examples": []},
+    {"date": "2026-11-15", "check": "sn_share", "value": {"overall": 0.85, "detections": {"2-4": 0.95, "5-9": 0.85, "10-49": 0.75, "50+": 0.65}, "days": {"<30": 0.96, "30-99": 0.78, "100-199": 0.49, "200+": 0.21}}, "n": 90, "examples": []}
+  ]
+}

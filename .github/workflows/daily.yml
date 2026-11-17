@@ -19,9 +19,10 @@ jobs:
         env:
           LASAIR_LSST_TOKEN: ${{ secrets.LASAIR_LSST_TOKEN }}
       - run: uv run python -m alert_monitor.checks.labels
+      - run: uv run python -m alert_monitor.views
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/snapshots data/objects results
+          git add data/snapshots data/objects results data/views.json
           git diff --cached --quiet || git commit -m "daily: $(date -u +%F)"
           git push
