@@ -64,9 +64,19 @@ Each field entry carries `rows`, the count Fink returned, or `error`, as `"<Exce
 
 The table at the end of `results/label_sanity.md` compares each of today's shares with the 2026-10-18 measurement. Each row gets a verdict: `near` (close to that measurement), `data moved` (today's row count is far from that day's), or `check suspect` (anything else). The labels are Fink's and are not corrected here. A gap is evidence, not a verdict.
 
+## Points
+
+`alert_monitor/points.py` reads the newest `data/objects/<YYYY-MM-DD>.jsonl.gz` and writes `data/points.json`, one row per object within a field's radius, as compact columnar JSON:
+
+```
+{"date": "<YYYY-MM-DD>", "labels": [...], "field": [...], "dx": [...], "dy": [...], "first": [...], "days": [...], "n": [...], "fink": [...], "alerce": [...], "score": [...], "id": [...]}
+```
+
+`field` is the position in `alert_monitor/fields.json` of the first field whose radius holds the object. `dx` and `dy` are the gnomonic offsets from that field's centre in degrees, rounded to 3 places, with `dx` positive toward increasing `ra`. `first` is `t_first` as MJD TAI, rounded to 2 places, `days` is whole days watched and `n` is `n_obs`. `fink` and `alerce` index into `labels`, the sorted normalised labels those two brokers gave, or are `null` when the broker gave none. `score` is Fink's score rounded to 2 places, or `null`. `id` is the record's id, kept as a string. `tests/test_points.py` holds the file to at most 24 gzipped bytes per row.
+
 ## Daily run
 
-`.github/workflows/daily.yml` runs the snapshot, `ingest_all` and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json.gz`, `data/objects`, `results/label_sanity.jsonl` and `results/label_sanity.md` to main. When no field returns rows, or the gzipped snapshot is over 50 MB, the job fails and commits nothing.
+`.github/workflows/daily.yml` runs the snapshot, `ingest_all` and the label checks at 11:00 UTC daily, and on manual dispatch, then commits `data/snapshots/<YYYY-MM-DD>.json.gz`, `data/objects`, `results/label_sanity.jsonl`, `results/label_sanity.md` and `data/points.json` to main. When no field returns rows, or the gzipped snapshot is over 50 MB, the job fails and commits nothing.
 
 ## Combined run
 
@@ -88,4 +98,5 @@ After writing, the run prints `<YYYY-MM-DD>: fink <new_ids> new, alerce <new_ids
 - `uv run python -m alert_monitor.ingest_all` writes today's merged objects and header.
 - `uv run python -m alert_monitor.ingest_all --backfill` does the same, filling each recorded ALeRCE gap and fetching each other whole ALeRCE cone without the page cap.
 - `uv run python -m alert_monitor.checks.labels` runs the label checks on today's snapshot.
+- `uv run python -m alert_monitor.points` writes `data/points.json` from the newest objects day.
 - `gh workflow run daily.yml`, or **Run workflow** on the Actions tab, runs the daily job by hand.
